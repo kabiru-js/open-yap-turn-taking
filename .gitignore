@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Dataset shards and derived artifacts are NOT committed.
+# See DATASET.md for acquisition; rebuild with scripts/00-04.
+data/raw/
+data/interim/
+
+# Local scratch
+*.log
+.DS_Store
+.venv/
+venv/

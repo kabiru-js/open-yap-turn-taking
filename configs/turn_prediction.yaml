@@ -1,0 +1,45 @@
+# Turn-prediction default configuration.
+# Loaded by src/research/config.py; runtime overrides are documented there.
+
+paths:
+  data_dir: data
+  raw_dir: data/raw
+  json_dir: data/raw/json
+  interim_dir: data/interim
+  results_dir: results
+  figures_dir: figures
+  figures_raw: figures/raw
+
+audio:
+  sample_rate: 48000
+  frame_len_ms: 30.0
+  hop_ms: 10.0
+  min_energy_db: -40.0
+  min_speech_ms: 200.0
+  hangover_frames: 6
+  max_gap_within_speaker_ms: 400.0
+
+features:
+  vad_margin_above_noise_db: 20.0
+  f0_range: [60, 400]
+  spectral_n_fft: 2048
+  spectral_hop: 512
+
+events:
+  clean_gap_min_ms: 0.0
+  clean_gap_max_ms: 1200.0
+  overlap_min_dur_ms: 30.0
+  interruption_post_offset_ms: 800.0
+  backchannel_max_dur_ms: 800.0
+  backchannel_max_words: 3
+
+prediction:
+  horizons_ms: [200, 500, 750, 1000, 1500]
+  decision_grid_ms: 200
+  lookback_s: 1.5
+  floor_lookback_s: 2.0
+
+model:
+  n_splits_loco: 16
+  test_conv_ids: []
+  seed: 42
