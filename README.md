@@ -152,6 +152,8 @@ RESEARCH_PLAN.md               original plan   ·   tests/              smoke te
 
 ## Next experiments
 
+- **Robustness (done)** — `exp-005_annotation_segmentation_robustness` (`experiments/EXP-002-annotation-robustness`): label onset jitter (0.71 ROC is stable to 400 ms jitter) and VAD margin ±3 dB (< 0.003 shift); label-shuffle/uniform controls collapse to chance, confirming real structure.
+- Input-side robustness — corrupt audio/window features (RMS, spectral flux, energy slope) to separate "signal in energy envelope" from "signal in spectral detail".
 - Neural temporal models (sequence over frames) with conversation-grouped splits, for longer-range rhythm.
 - Richer VAD / ASR-aligned overlap labels → sharper backchannel & interruption detection (weak under energy VAD).
 - Cross-corpus evaluation with more dyads to separate universal vs. dyadic rhythm.

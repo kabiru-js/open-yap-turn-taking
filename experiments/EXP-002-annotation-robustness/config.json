@@ -1,0 +1,21 @@
+{
+  "arm_a": {
+    "jitter_sigmas_ms": [0, 25, 50, 100, 200, 400],
+    "label_seeds": [101, 202, 303],
+    "shifts_ms": [-200, 200],
+    "shift_seed": 505,
+    "shuffle_seed": 404,
+    "uniform_seed": 606,
+    "horizons_gbdt_ms": [1000],
+    "horizons_lr_ms": [1000, 500]
+  },
+  "arm_b": {
+    "margins_db": [-3, 0, 3],
+    "drift_margins_db": [-3, 3],
+    "horizons_ms": [1000]
+  },
+  "train": {
+    "cap": 90000,
+    "seed": 42
+  }
+}

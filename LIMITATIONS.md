@@ -91,6 +91,11 @@ Empirical consequences of the above, now quantified:
 4. **VAD-threshold sensitivity confirmed**: turning off 400ms within-speaker
    merging inflated transition counts 3x (40k vs 13.6k) and washed out
    backchannel/interruption structure (9 vs 2,336).
+5. **Robustness bounds are LR-only at the extreme**: the EXP-002 perturbation
+   cells (annotation onset jitter, VAD margin) were run with LR; GBDT (the
+   paper's best, 0.7523) was only anchored at the clean condition. Robustness
+   of nonlinear models at 400 ms jitter is not directly measured (disclosed in
+   `experiments/EXP-002-annotation-robustness/README.md`).
 
 ---
 

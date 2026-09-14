@@ -190,7 +190,7 @@ See LEAKAGE_AUDIT.md for full audit. Key risks:
 | ASR word timestamps too coarse | Use audio VAD for primary event timing |
 | Bluetooth bandwidth variation | Report per-track bandwidth; exclude narrowband from spectral analyses |
 | Class imbalance (transitions are sparse) | Report PR-AUC alongside ROC-AUC; use class weights |
-| Energy threshold sensitivity in VAD | Report VAD sensitivity analysis (±3dB threshold) |
+| Energy threshold sensitivity in VAD | Report VAD sensitivity analysis (±3dB threshold) — **DONE in `exp-002_annotation_segmentation_robustness` (EXP-002, Arm B)**: LR ROC @1000ms moves < 0.003 across Δ ∈ {−3, 0, +3} dB (0.7126 / 0.7147 / 0.7148)
 | Noisy ASR → false word counts | Use audio segment lengths as primary proxy |
 
 ---

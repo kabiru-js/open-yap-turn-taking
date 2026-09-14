@@ -145,3 +145,25 @@ Next question: <follow-up>
      was refreshed from `models_loco_1000.json`.
 - **Next question**: role-resolved features (per-channel → per-role re-indexing)
   to measure how much the channel-blind `a_*`/`b_*` representation costs.
+---
+
+## Experiment 5 -- Annotation & Segmentation Robustness (EXP-002)
+
+- **Experiment**: `exp-005_annotation_segmentation_robustness`
+- **Hypothesis**: The fitted turn-onset classifiers predict real speech structure, not their own annotation conventions: corrupting the (A) label annotations (onset jitter) or (B) the VAD segmentation that produces them should degrade performance only incrementally, while destroying the feature<->label alignment (shuffle/uniform controls) should collapse ROC to chance.
+- **Dataset subset**: All 16 conversations; 160,295 decision points (200ms grid); windowed features over [t-1.5s, t) (73 features); labels re-derived per Arm A perturbation with the production rule (events.py).
+- **Features**: Layer T + Layer A (frozen); Arm B re-derives VAD segmentation at threshold max(floor_metric, p25(rms)) + (20 + Delta) dB with production hangover logic.
+- **Model**: LogisticRegression (C=1, standardized, median-imputed), 16-fold LOCO, 90k train cap, seed 42, horizon 1000ms. LR-only for perturbation cells (GBDT clean anchor from EXP-001: 0.7523/0.3319).
+- **Evaluation**: pool ROC-AUC / PR-AUC (existing eval_loco pipeline).
+- **Result (Arm A, ROC @1000ms)**:
+  - clean 0.7148/PR 0.2808 (anchor = EXP-001).
+  - jitter sigma 25/50/100/200/400ms -> 0.7143-0.7152 / 0.7141 / 0.7137-0.7144 / 0.7104-0.7116 / 0.7034 (monotone graceful decay; -0.001 at 100ms, -0.011 at 400ms = 25% of the label window).
+  - shift -200ms 0.7030/PR 0.3005; shift +200ms 0.7270/PR 0.2561 (base-rate anti-correlated movement; ordering structure preserved).
+  - shuffle (within-conv label permutation, marginal kept) 0.5007/PR 0.1316; uniform (Bernoulli) 0.4956/PR 0.1499 -- chance.
+- **Result (Arm B, ROC @1000ms)**: Delta=+3dB 0.7126/PR 0.2680; Delta=-3dB 0.7147/PR 0.2867; drift cell (Delta=-3 features, clean labels) 0.7176/PR 0.2834; anchor Delta=0 = clean 0.7148/0.2808. Segmentation margin moves ROC < 0.003.
+- **Interpretation**: Turn-onset prediction is robust to annotation timing noise well beyond transcription error, and to VAD segmentation slop. The shuffle/uniform controls collapse to 0.50 => the 0.71 signal is genuine acoustic+temporal structure, not alignment with annotations. Supports full-ML-integration thesis claims.
+- **Failure modes**:
+  1. A naive *global* onset shuffle re-introduced a t-profile in labels (P(label|t) rises with the t+h threshold), letting the elapsed_s feature recover ~0.77 ROC; the control was redesigned as within-conversation label permutation (marginal + t-profile preserved) and re-ran to 0.50.
+  2. eval_loco_fast v1 read labels from df columns (stored originals) -> every condition returned the same ROC 0.7148 with changing base rates; poisoned JSON deleted, labels now passed as the perturbed y array, all cells re-derived.
+  3. Machine OOM (7.9GB RAM, ~1GB free) with precomputed 16-fold float64 matrices during the shuffle fit -> low-memory per-fold control runner; Arm B rebuild OOM'd at margin 0 (anchor reused from stored dataset).
+- **Next question**: input-side robustness -- corrupt the audio/window features (RMS, spectral flux, energy slope) instead of labels to separate "signal in energy envelope" from "signal in spectral detail" (candidate exp-006).
