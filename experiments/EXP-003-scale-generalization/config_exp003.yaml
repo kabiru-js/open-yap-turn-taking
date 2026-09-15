@@ -1,0 +1,272 @@
+# EXP-003 — Reproducible experiment configuration
+# This config pins every methodological decision for EXP-003 before any corpus access.
+# All dataset-dependent values are marked PENDING_ACCESS and will be validated exactly once
+# when access is granted, using the verification checklist in PRE-REG.md §Verification.
+# After validation, this config is frozen and no further edits are permitted.
+# All other values are frozen NOW and may not change regardless of results.
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Paths
+# ──────────────────────────────────────────────────────────────────────────────
+paths:
+  data_dir: data
+  raw_dir: data/raw                    # PENDING_ACCESS: sample shards (local)
+  full_corpus_dir: data/full           # PENDING_ACCESS: full corpus after DUA approval
+  json_dir: data/raw/json              # PENDING_ACCESS: sample JSON metadata
+  full_json_dir: data/full/json        # PENDING_ACCESS: full corpus JSON metadata
+  interim_dir: data/interim
+  results_dir: results
+  figures_dir: figures
+  figures_raw: figures/raw
+  exp003_dir: experiments/EXP-003-scale-generalization
+  exp003_results: experiments/EXP-003-scale-generalization/results  # PENDING_ACCESS
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Audio (frozen — identical to turn_prediction.yaml)
+# ──────────────────────────────────────────────────────────────────────────────
+audio:
+  sample_rate: 48000
+  frame_len_ms: 30.0
+  hop_ms: 10.0
+  min_energy_db: -40.0
+  min_speech_ms: 200.0
+  hangover_frames: 6
+  max_gap_within_speaker_ms: 400.0
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Feature construction (frozen — identical to turn_prediction.yaml)
+# ──────────────────────────────────────────────────────────────────────────────
+features:
+  vad_margin_above_noise_db: 20.0
+  f0_range: [60, 400]
+  spectral_n_fft: 2048
+  spectral_hop: 512
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Events / labels (frozen — identical to turn_prediction.yaml)
+# ──────────────────────────────────────────────────────────────────────────────
+events:
+  clean_gap_min_ms: 0.0
+  clean_gap_max_ms: 1200.0
+  overlap_min_dur_ms: 30.0
+  interruption_post_offset_ms: 800.0
+  backchannel_max_dur_ms: 800.0
+  backchannel_max_words: 3
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Prediction grid (frozen)
+# ──────────────────────────────────────────────────────────────────────────────
+prediction:
+  horizons_ms: [200, 500, 750, 1000, 1500]
+  primary_horizon_ms: 1000             # hypothesis tested at this horizon
+  decision_grid_ms: 200
+  lookback_s: 1.5
+  floor_lookback_s: 2.0
+  tail_censor_s: 2.0                   # discard last 2s of conversation
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Feature column set (frozen symbolic reference)
+# ──────────────────────────────────────────────────────────────────────────────
+feature_set:
+  reference: "FEAT_COLS from src/research/config.py"
+  n_features: 73
+  frozen: true                         # may not be changed
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Dataset construction (frozen)
+# ──────────────────────────────────────────────────────────────────────────────
+dataset:
+  cap_per_fold: 90000
+  cap_seed: 42
+  imputer: median
+  scaler: StandardScaler               # LR only; tree models skip
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Model hyperparameters (frozen — from EXP-001)
+# ──────────────────────────────────────────────────────────────────────────────
+models:
+  lr:
+    C: 1.0
+    max_iter: 2000
+    solver: lbfgs
+    random_state: null                  # deterministic given data
+  gbdt:
+    max_iter: 160
+    learning_rate: 0.12
+    random_state: 42
+    early_stopping: false
+  rf:
+    n_estimators: 80
+    min_samples_leaf: 25
+    random_state: 42
+    n_jobs: -1
+  majority:
+    strategy: most_frequent
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Splits (frozen — seed 42, all assignments deterministic)
+# ──────────────────────────────────────────────────────────────────────────────
+splits:
+  S1:
+    name: conversation-grouped-10-fold
+    fold_unit: conversation             # unit of independence = conversation
+    n_folds: 10
+    seed: 42
+    stratify_by:
+      - relationship                    # 5 classes
+      - bandwidth_class                 # effective_bandwidth_hz < 9k: none/some
+      - duration_quartile               # conversation duration quartile
+    speaker_overlap_across_folds: true  # permitted; accounted for by S2
+    notes: >
+      Mirrors EXP-001's conversation-level independence for comparability.
+      Speaker leakage across folds is expected and is the reason S2 exists.
+
+  S2:
+    name: dyad-disjoint-strict-generalization
+    fold_unit: dyad                     # unordered speaker pair
+    holdout_fraction: 0.20
+    seed: 42
+    criterion: both_speakers_in_holdout # test convos must have BOTH speakers in holdout dyads
+    train_criterion: both_in_train      # train convos must have BOTH speakers in train dyads
+    exclude_mixed: true                 # convos with one speaker each side are excluded and counted
+    notes: >
+      Honest generalization: no speaker from test ever appears in train.
+      Expected test size: ~60-90 conversations.
+
+  S3:
+    name: diagnostics
+    includes:
+      - friends_only_stratum            # report separately vs others
+      - per_conversation_scatter        # ROC vs conversation metadata
+      - base_rate_by_relationship       # frequency table
+      - bandwidth_restricted_subset     # effective_bandwidth_hz >= 9k only
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Metrics (frozen)
+# ──────────────────────────────────────────────────────────────────────────────
+metrics:
+  primary:
+    name: pooled_roc_auc
+    horizon_ms: 1000
+    model: lr
+  secondary:
+    - per_fold_roc_auc_mean_sd         # EXP-001 convention
+    - gbdt_pooled_roc_auc
+    - rf_pooled_roc_auc
+    - pr_auc_all_models
+    - base_rate_report
+    - horizon_sweep_lr
+    - top_features_gbdt
+  ci:
+    method: cluster_bootstrap
+    block_unit: conversation            # block = conversation's (label, score) pairs
+    n_resamples: 10000
+    alpha: 0.05                        # 95% CI
+    method_note: >
+      Percentile CI; DeLong not used (invalid under clustering).
+      Fallback: 1000 resamples if 10000 fails.
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Hypothesis thresholds (frozen)
+# ──────────────────────────────────────────────────────────────────────────────
+hypotheses:
+  H1_survival:
+    criterion: "cluster_bootstrap_95pct_CI_lower_bound > 0.60"
+    description: >
+      Signal survives scale: full-corpus pooled ROC LR has CI lower bound
+      > 0.60 (10 points above 0.50 chance floor).
+    reference: EXP-001 pooled LR = 0.7077
+  H2_no_degradation:
+    criterion: "cluster_bootstrap_95pct_CI_lower_bound_of_delta >= -0.10"
+    delta: "full_corpus_pooled_roc - 0.7077"
+    description: >
+      No material degradation vs sample: CI of (full − EXP-001 pooled 0.7077)
+      has lower bound ≥ −0.10.
+    margin_justification: >
+      Per-fold SD 0.0716; pair-LOCO drop LR 0.715→0.623 ≈ −0.09.
+  outcome_table:
+    H1_and_H2_pass: "Signal persists at scale and is within 0.10 of sample"
+    H1_pass_H2_fail: "Signal persists, materially degraded at scale"
+    H1_fail: "Signal does not survive scale; EXP-001 was sample-specific"
+    control_fail: "Experiment invalid; no thesis claim until harness fixed"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Controls / chance floor (frozen)
+# ──────────────────────────────────────────────────────────────────────────────
+controls:
+  shuffle:
+    method: within_conversation_label_permutation
+    n_folds_subset: 3
+    seed: 42
+    must_land_near: 0.50               # if not, harness is broken; stop
+  uniform:
+    method: bernoulli_at_observed_base_rate
+    n_folds_subset: 3
+    seed: 42
+    must_land_near: 0.50
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Budget / stopping rule (frozen)
+# ──────────────────────────────────────────────────────────────────────────────
+budget:
+  B1_target:
+    description: >
+      Full corpus on adequate hardware; fold-parallel feature build;
+      fold evaluation streaming (never load > 1 conv of frames into RAM).
+  B2_staged_fallback:
+    description: >
+      If B1 hardware unavailable: contiguous conversation slices
+      S1..Sk (~100-125h each), pre-registered before any evaluation.
+      No inter-stage tuning against prior stage's test numbers.
+  stopping_rule: >
+    Stop when pre-registered budget is consumed or all stages complete.
+    No optional stopping. Amendments require timestamped pre-registration
+    BEFORE any evaluation on the amended run.
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Reproducibility guardrails (frozen)
+# ──────────────────────────────────────────────────────────────────────────────
+guardrails:
+  sample_repro_unit_test: >
+    Before any corpus run, ingest and evaluate the known 16-conv sample.
+    Must reproduce EXP-001 pooled LR ROC 0.7077 within ±0.005.
+    If it does not, the port is broken and corpus runs are prohibited.
+  corpus_access_status: PENDING_ACCESS  # ← update to ACCESS_GRANTED on DUA approval
+  no_exp001_002_modifications: true
+  no_hyperparameter_search: true
+  no_feature_search: true
+  no_test_set_peeking: true
+  no_optional_stopping: true
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Open Yap 1K full-corpus metadata (to be verified on access)
+# ──────────────────────────────────────────────────────────────────────────────
+full_corpus_reference:
+  source: "Open Yap 1K v1.0 — The Agentic Data Company"
+  license: "Data Use Agreement (free commercial + research)"
+  hours: 1000
+  conversations: 1602
+  speakers: 239
+  sample_rate: 48000
+  format: PCM                         # PENDING_ACCESS: confirm PCM per speaker file
+  relationship_distribution:          # PENDING_ACCESS: confirm from metadata
+    friends: 0.709
+    colleagues: 0.108
+    romantic: 0.098
+    family: 0.085
+  dynamics_p50:                       # PENDING_ACCESS: confirm from metadata
+    turn_gap_ms: 580
+    overlap_pct_voiced: 8.3
+    turns_per_minute: 11.9
+    speech_dominance: 0.56
+    speaking_rate_wpm: 186
+    effective_bandwidth_khz: 11.6
+    dnsmos_bak: 3.97
+  top_contributor_pct: 0.018
+  top_10_contributor_pct: 0.179
+  quality_conformance:                # PENDING_ACCESS: confirm
+    track_anchor: "100%"
+    word_transcripts: "100% both speakers"
+    dnsmos_bak_gte_3: "100%"
+    zero_clip: "98.38%"
+    bandwidth_gte_6k: "96.44%"
