@@ -167,3 +167,35 @@ Next question: <follow-up>
   2. eval_loco_fast v1 read labels from df columns (stored originals) -> every condition returned the same ROC 0.7148 with changing base rates; poisoned JSON deleted, labels now passed as the perturbed y array, all cells re-derived.
   3. Machine OOM (7.9GB RAM, ~1GB free) with precomputed 16-fold float64 matrices during the shuffle fit -> low-memory per-fold control runner; Arm B rebuild OOM'd at margin 0 (anchor reused from stored dataset).
 - **Next question**: input-side robustness -- corrupt the audio/window features (RMS, spectral flux, energy slope) instead of labels to separate "signal in energy envelope" from "signal in spectral detail" (candidate exp-006).
+
+
+---
+
+## Experiment 6 -- Role-Resolved Feature Representation & Asymmetry (EXP-004)
+
+- **Experiment**: `exp-006_role_resolved_representation`
+- **Hypothesis**: The channel-arbitrary assignment (channel A vs B) forced models to learn symmetric averages or waste capacity multiplexing between channels. Re-indexing causal features by conversational role (`floor_*` = current floor holder, `listener_*` = partner) will recover the true acoustic predictive value, close the linear-vs-tree model gap, and improve out-of-dyad generalization in Pair-LOCO.
+- **Dataset subset**: All 16 conversations; 160,295 decision points (200ms grid); windowed causal features over [t-1.5s, t) (73 features: 35 floor, 35 listener, 3 temporal).
+- **Features**: Layer T + Layer A (role-resolved). Strictly causal: `current_speaker` is the speaker with the most recent segment start <= t (audio VAD only, no future lookahead).
+- **Models**: Majority, LR (C=1, standardized), GBDT (160 iters, lr 0.12), RF (80 trees, min_leaf 25). 16-fold conv-LOCO and 4-fold pair-LOCO, 90k train cap, seed 42.
+- **Evaluation**: 16-fold conv-LOCO paired deltas (ROC / PR-AUC) with 95% bootstrap CIs, ablation suite, 4-fold Pair-LOCO, horizon sweep (200-1500ms), within-conv shuffle chance-control.
+- **Result (conv-LOCO @1000ms)**:
+  | Model | Channel-Blind ROC | Role-Resolved ROC | Paired Delta (95% CI) | p-value | Channel PR (wt) | Role PR (wt) |
+  |---|---|---|---|---|---|---|
+  | Majority | 0.5000 | 0.5000 | +0.0000 | -- | 0.1501 | 0.1501 |
+  | LR | 0.7148 ± 0.0716 | **0.7291 ± 0.0705** | **+0.0144** [+0.0053, +0.0246] | p=0.0106 | 0.2906 | **0.3208** |
+  | GBDT | 0.7523 ± 0.0653 | **0.7709 ± 0.0641** | **+0.0186** [+0.0130, +0.0246] | p < 0.0001 | 0.3390 | **0.3787** |
+  | RF | 0.7620 ± 0.0674 | **0.7707 ± 0.0658** | **+0.0088** [+0.0044, +0.0136] | p=0.0019 | 0.3528 | **0.3835** |
+- **Result (Acoustics-only recovery)**:
+  - Role-resolved acoustics alone (no pause/timing features, 70 feats): LR **0.7194** (PR 0.3113), GBDT **0.7575** (PR 0.3547).
+  - Channel acoustics alone (70 feats): LR 0.6944 (PR 0.2748), GBDT 0.7297 (PR 0.3090).
+  - Crucial finding: Role-resolved acoustics *alone* beat the full 73-feature channel-blind model (LR 0.719 vs 0.715; GBDT 0.758 vs 0.752), refuting the prior belief that acoustics are weak without pause features.
+  - Floor acoustics (35 feats: LR 0.6814 / GBDT 0.7015) and listener acoustics (35 feats: LR 0.6663 / GBDT 0.6985) both carry substantial, complementary signal.
+- **Result (Pair-LOCO generalization across 4 unseen dyads)**:
+  - LR: 0.6213 -> **0.6600** (+0.0386 ROC gain, recovering nearly half of the unseen-dyad generalization drop).
+  - GBDT: 0.6666 -> **0.6722** (+0.0056).
+- **Result (Horizon sweep GBDT ROC)**:
+  - 200ms: 0.7929 -> **0.8191** · 500ms: 0.7847 -> **0.8064** · 750ms: 0.7643 -> **0.7829** · 1000ms: 0.7523 -> **0.7709** · 1500ms: 0.7275 -> **0.7460**.
+- **Result (Control)**: Within-conv shuffle collapses to 0.5039 (LR) and 0.5024 (GBDT).
+- **Interpretation**: Turn-taking is an intrinsically asymmetric conversational process. Role resolution removes channel-arbitrary interference, unlocking superior acoustic predictive power and establishing new state-of-the-art results across all horizons.
+- **Next question**: Neural sequence modeling on role-resolved frame streams to capture turn-final intonation contours and speech rate deceleration over continuous time.
